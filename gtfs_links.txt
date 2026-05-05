@@ -1,0 +1,2 @@
+https://gtfs.ztp.krakow.pl/GTFS_KRK_A.zip
+https://www.kolejemalopolskie.com.pl/rozklady_jazdy/ald-gtfs.zip

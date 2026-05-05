@@ -1,0 +1,18 @@
+{
+  "LIS01": [
+    {"line": "LIS", "time": "07:25", "dest": "Baczyn Pętla", "direction": "01", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "08:45", "dest": "Baczyn Pętla", "direction": "01", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "10:20", "dest": "Baczyn Pętla", "direction": "01", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "13:20", "dest": "Baczyn Pętla", "direction": "01", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "14:35", "dest": "Baczyn Pętla", "direction": "01", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "15:55", "dest": "Baczyn Pętla", "direction": "01", "days": [0, 1, 2, 3, 4]}
+  ],
+  "LIS02": [
+    {"line": "LIS", "time": "07:12", "dest": "Rączna Osiedle", "direction": "02", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "08:32", "dest": "Rączna Osiedle", "direction": "02", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "10:02", "dest": "Rączna Osiedle", "direction": "02", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "13:07", "dest": "Rączna Osiedle", "direction": "02", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "14:24", "dest": "Rączna Osiedle", "direction": "02", "days": [0, 1, 2, 3, 4]},
+    {"line": "LIS", "time": "15:42", "dest": "Rączna Osiedle", "direction": "02", "days": [0, 1, 2, 3, 4]}
+  ]
+}
