@@ -54,8 +54,25 @@ for row in range(ilosc):
     labels.append(row_labels)
 layout.setColumnStretch(1, 10)
 
+if force_update == 0:
+    try:
+        with open('date.txt', 'r', encoding='utf-8') as f:
+            date_config = f.readline().strip()
+            if date_config != today:
+                with open('date.txt', 'w', encoding='utf-8') as f:
+                    f.write(today)
+            else:
+                offline_config = 1
+                print("[DEBUG] Aktualizacja GTFS byla juz dzis robiona, pomijam. . .")
+    except FileNotFoundError:
+        print("[DEBUG] Brak date.txt, tworze nowy. . .")
+        with open('date.txt', 'w', encoding='utf-8') as f:
+            f.write(today)
+else:
+    print("[DEBUG] Force GTFS update wlaczony!")
+
 def gtfs_update():
-    global gtfs_number, trip_map
+    global gtfs_number, trip_map, offline_config
     trip_map = {}
     gtfs_links = open("gtfs_links.txt", "r")
     line = gtfs_links.readline()
@@ -68,16 +85,17 @@ def gtfs_update():
     while line:
         local_departures = {}
         gtfs_number = gtfs_number + 1
-        print("[DEBUG] Pobieranie GTFS: " + line.strip())
-        try:
-            request = requests.get(line.strip())
-        except:
-            print("[ERROR] Brak internetu: " + line.strip())
-            print("[ERROR] Pomijam reszte. . .")
-            return False
-        print("[DEBUG] Zapisywanie GTFS: " + line.strip())
-        with open("GTFS/" + str(gtfs_number) + ".zip", mode="wb") as file:
-            file.write(request.content)
+        if offline_config == 0:
+            print("[DEBUG] Pobieranie GTFS: " + line.strip())
+            try:
+                request = requests.get(line.strip())
+            except:
+                print("[ERROR] Brak internetu: " + line.strip())
+                print("[ERROR] Pomijam reszte. . .")
+                return False
+            print("[DEBUG] Zapisywanie GTFS: " + line.strip())
+            with open("GTFS/" + str(gtfs_number) + ".zip", mode="wb") as file:
+                file.write(request.content)
         with zipfile.ZipFile("GTFS/" + str(gtfs_number) + ".zip", 'r') as zip:
             with zip.open('stops.txt', 'r') as f:
                 r_reader = csv.DictReader(io.TextIOWrapper(f, encoding='utf-8-sig'))
@@ -237,6 +255,8 @@ def gtfs_update():
     print("[DEBUG] Dane zopytmalizowane i zapisane!")
 
 def offline():
+    print(f"[DEBUG] (ONLINE) stops_id: {stops_id}")
+    print(f"[DEBUG] (ONLINE) trip_map size: {len(trip_map)}")
     global departures_now, backup
     departures_now = []
     with open('optimized.json', 'r', encoding='utf-8') as f:
@@ -258,8 +278,6 @@ def offline():
 
 def online():
     global departures_now, backup, online_backup, fail_count
-    print(f"[DEBUG] (ONLINE) stops_id: {stops_id}")
-    print(f"[DEBUG] (ONLINE) trip_map size: {len(trip_map)}")
     with open('live_links.txt', 'r', encoding='utf-8') as f:
         for URL in f:
             URL = URL.strip()
@@ -340,19 +358,7 @@ def update():
         online()
     display()
 
-if force_update == 0:
-    with open('date.txt', 'r', encoding='utf-8') as f:
-        date_config = f.readline().strip()
-        if date_config != today:
-            with open('date.txt', 'w', encoding='utf-8') as f:
-                f.write(today)
-                if offline_config == 0:
-                    gtfs_update()
-        else:
-            print("[DEBUG] Aktualizacja GTFS byla juz dzis robiona, pomijam. . .")
-else:
-    print("[DEBUG] Force GTFS update wlaczony!")
-    gtfs_update()
+gtfs_update()
 
 timer = QTimer()
 timer.timeout.connect(update)
