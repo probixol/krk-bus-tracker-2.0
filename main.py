@@ -22,10 +22,7 @@ with open("config.txt", mode="r", encoding="utf-8") as config_file:
     direction = config_file.readline().strip()
     kml = config_file.readline().strip()
     ilosc = int(config_file.readline().strip())
-    offline_config = int(config_file.readline().strip())
     force_update = int(config_file.readline().strip())
-
-print(f"[DEBUG] Offline: {offline_config}")
 
 app = QApplication(sys.argv)
 app.setOverrideCursor(Qt.CursorShape.BlankCursor)
@@ -54,25 +51,24 @@ for row in range(ilosc):
     labels.append(row_labels)
 layout.setColumnStretch(1, 10)
 
+skip = 0
 if force_update == 0:
     try:
         with open('date.txt', 'r', encoding='utf-8') as f:
             date_config = f.readline().strip()
-            if date_config != today:
-                with open('date.txt', 'w', encoding='utf-8') as f:
-                    f.write(today)
-            else:
-                offline_config = 1
-                print("[DEBUG] Aktualizacja GTFS byla juz dzis robiona, pomijam. . .")
+        if date_config == today:
+            skip = 1
+            print("[DEBUG] Aktualizacja GTFS byla juz dzis robiona, pomijam. . .")
     except FileNotFoundError:
-        print("[DEBUG] Brak date.txt, tworze nowy. . .")
         with open('date.txt', 'w', encoding='utf-8') as f:
             f.write(today)
-else:
+
+if force_update == 1:
+    skip = 0
     print("[DEBUG] Force GTFS update wlaczony!")
 
 def gtfs_update():
-    global gtfs_number, trip_map, offline_config
+    global gtfs_number, trip_map, skip
     trip_map = {}
     gtfs_links = open("gtfs_links.txt", "r")
     line = gtfs_links.readline()
@@ -85,7 +81,7 @@ def gtfs_update():
     while line:
         local_departures = {}
         gtfs_number = gtfs_number + 1
-        if offline_config == 0:
+        if skip == 0:
             print("[DEBUG] Pobieranie GTFS: " + line.strip())
             try:
                 request = requests.get(line.strip())
@@ -351,18 +347,33 @@ def display():
                 labels[row][col].setStyleSheet("color: white;")
             labels[row][col].setText(f"{departures_now[row][col]}")
 
+def midnight_check():
+    global today, today_datetime, weekday, skip
+    new_today = datetime.datetime.now().strftime("%Y%m%d")
+    if new_today != today:
+        print("[DEBUG] Nowy dzien, aktualizuje GTFS. . .")
+        today = new_today
+        today_datetime = datetime.datetime.now()
+        weekday = datetime.datetime.now().weekday()
+        skip = 0
+        with open('date.txt', 'w', encoding='utf-8') as f:  # <- dodaj
+            f.write(today)
+        gtfs_update()
+
+midnight_timer = QTimer()
+midnight_timer.timeout.connect(midnight_check)
+midnight_timer.start(600000) # 10 min
+
 def update():
-    global offline_config
     offline()
-    if offline_config == 0:
-        online()
+    online()
     display()
 
 gtfs_update()
 
 timer = QTimer()
 timer.timeout.connect(update)
-timer.start(20000)
+timer.start(20000) # 20 sec
 
 update()
 
