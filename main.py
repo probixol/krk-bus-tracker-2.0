@@ -1,19 +1,9 @@
-# TODO
-# aktualizacja dnia |
-# niech sie aktualizuje raz dziennie max |
-# backup rozkladu raz zeby bylo stabilnie | 50/50 moze byc
-# tryb offline | OK
-
 import csv
-import pathlib, os, requests, zipfile, io, gtfs_kit as gk, json, datetime, sys, threading
+import os, requests, zipfile, io, json, datetime, sys
 from google.transit import gtfs_realtime_pb2
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QApplication, QWidget, QGridLayout, QLabel
 from PyQt6.QtGui import QFontDatabase, QFont
-from pandas.core.dtypes.missing import construct_1d_array_from_inferred_fill_value
-
-from sqlalchemy.testing.plugin.plugin_base import testing
-from gtfs_kit import stop_times
 
 fail_count = 1
 online_backup = []
