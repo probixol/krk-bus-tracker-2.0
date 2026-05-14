@@ -5,6 +5,7 @@ from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QApplication, QWidget, QGridLayout, QLabel
 from PyQt6.QtGui import QFontDatabase, QFont
 
+updated = False
 fail_count = 1
 online_backup = []
 backup = []
@@ -58,7 +59,7 @@ if force_update == 0:
             date_config = f.readline().strip()
         if date_config == today:
             skip = 1
-            print("[DEBUG] Aktualizacja GTFS byla juz dzis robiona, pomijam. . .")
+            print("[INFO] GTFS bylo dzis juz pobierane, pomijam. . .")
     except FileNotFoundError:
         with open('date.txt', 'w', encoding='utf-8') as f:
             f.write(today)
@@ -68,7 +69,9 @@ if force_update == 1:
     print("[DEBUG] Force GTFS update wlaczony!")
 
 def gtfs_update():
-    global gtfs_number, trip_map, skip
+    global gtfs_number, trip_map, skip, updated
+    if updated == True:
+        return False
     trip_map = {}
     gtfs_links = open("gtfs_links.txt", "r")
     line = gtfs_links.readline()
@@ -219,7 +222,7 @@ def gtfs_update():
                     departures.append(stop_data)
 
         line = gtfs_links.readline()
-
+    updated = True
     try:
         with open('custom.json', 'r', encoding='utf-8') as f:
             custom_data = json.load(f)
@@ -348,28 +351,28 @@ def display():
             labels[row][col].setText(f"{departures_now[row][col]}")
 
 def midnight_check():
-    global today, today_datetime, weekday, skip
+    global today, today_datetime, weekday, updated
     new_today = datetime.datetime.now().strftime("%Y%m%d")
     if new_today != today:
-        print("[DEBUG] Nowy dzien, aktualizuje GTFS. . .")
-        today = new_today
-        today_datetime = datetime.datetime.now()
-        weekday = datetime.datetime.now().weekday()
-        skip = 0
-        with open('date.txt', 'w', encoding='utf-8') as f:  # <- dodaj
-            f.write(today)
-        gtfs_update()
+        if int(datetime.datetime.now().strftime("%H")) > 5:
 
-midnight_timer = QTimer()
-midnight_timer.timeout.connect(midnight_check)
-midnight_timer.start(600000) # 10 min
+            print("[DEBUG] Nowy dzien, aktualizuje GTFS. . .")
+            today = new_today
+            today_datetime = datetime.datetime.now()
+            weekday = datetime.datetime.now().weekday()
+            updated = False
+            with open('date.txt', 'w', encoding='utf-8') as f:
+                f.write(today)
+            gtfs_update()
+        else:
+            print("[INFO] Update GTFS wstrzymany (przed 6:00)")
 
 def update():
+    gtfs_update()
     offline()
     online()
     display()
-
-gtfs_update()
+    midnight_check()
 
 timer = QTimer()
 timer.timeout.connect(update)
