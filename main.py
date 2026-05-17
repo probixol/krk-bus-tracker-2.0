@@ -2,8 +2,10 @@ import csv
 import os, requests, zipfile, io, json, datetime, sys
 from google.transit import gtfs_realtime_pb2
 from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtWidgets import QApplication, QWidget, QGridLayout, QLabel
-from PyQt6.QtGui import QFontDatabase, QFont
+from PyQt6.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QSplashScreen
+from PyQt6.QtGui import QFontDatabase, QFont, QPixmap
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 updated = False
 fail_count = 1
@@ -24,6 +26,8 @@ with open("config.txt", mode="r", encoding="utf-8") as config_file:
     kml = config_file.readline().strip()
     ilosc = int(config_file.readline().strip())
     force_update = int(config_file.readline().strip())
+    custom_check = config_file.readline().strip()
+    filter = config_file.readline().strip()
 
 app = QApplication(sys.argv)
 app.setOverrideCursor(Qt.CursorShape.BlankCursor)
@@ -40,6 +44,15 @@ clock = QLabel("")
 clock.setFont(custom_font)
 clock.setStyleSheet("color: white;")
 layout.addWidget(clock, 0, 0)
+# bardzo zoptymalizowane dziekuje mateusz
+warning_label = QLabel("")
+warning_label.setFont(custom_font)
+warning_label.setStyleSheet("color: #FFCC00;")
+layout.addWidget(warning_label, 0, 1)
+warning_label2 = QLabel("")
+warning_label2.setFont(custom_font)
+warning_label2.setStyleSheet("color: #FFCC00;")
+layout.addWidget(warning_label2, 0, 2)
 
 labels = []
 for row in range(ilosc):
@@ -53,6 +66,7 @@ for row in range(ilosc):
 layout.setColumnStretch(1, 10)
 
 skip = 0
+
 if force_update == 0:
     try:
         with open('date.txt', 'r', encoding='utf-8') as f:
@@ -69,9 +83,57 @@ if force_update == 1:
     print("[DEBUG] Force GTFS update wlaczony!")
 
 def gtfs_update():
-    global gtfs_number, trip_map, skip, updated
+    global gtfs_number, trip_map, skip, updated, warning
     if updated == True:
         return False
+
+    if custom_check == "1":
+        with open("scrape_custom_links.txt") as f:
+            scraped = []
+            for line in f:
+                page_url = line.strip()
+                html = requests.get(page_url).text
+                soup = BeautifulSoup(html, "html.parser")
+                pdf_url = None
+
+                for a in soup.find_all("a", href=True):  # filter na wszystkie linki (<a href="")
+                    if ".pdf" in a["href"]:
+                        if filter in a["href"]:
+                            pdf_url = urljoin(page_url, a["href"])
+                            print(f"[INFO] Scrapowano rozklad: {pdf_url}")
+                            scraped.append(pdf_url)
+                if pdf_url is None:
+                    print("[INFO] Nie scrapowano zadnego rozkladu.")
+
+            with open("custom_links.txt", "r") as f:
+                for line in f:
+                    url = line.strip()
+                    if url and url not in scraped:
+                        scraped.append(url)
+
+            if len(os.listdir("custom")) == 0:
+                for i, url in enumerate(scraped, start=1):
+                    r = requests.get(url)
+                    with open("custom/" + str(i) + ".pdf", "wb") as f:
+                        f.write(r.content)
+                print("[DEBUG] Zapisano nowe rozklady do folderu custom.")
+            else:
+                for i, url in enumerate(scraped, start=1):
+                    f2 = requests.get(url)
+                    with open("custom/" + str(i) + ".pdf", "rb") as f1:
+                        if f1.read() == f2.content:
+                            print("[INFO] Nie wykryto aktualizacji prywaciarzy!")
+                            pixmap = QPixmap("nie.jpg")
+                            splash = QSplashScreen(pixmap)
+                            splash.show()
+                            warning = False
+                        else:
+                            print("[WARNING] Wykryto aktualizacje prywaciarzy!")
+                            pixmap = QPixmap("tak.jpg")
+                            splash = QSplashScreen(pixmap)
+                            splash.show()
+                            warning = True
+
     trip_map = {}
     gtfs_links = open("gtfs_links.txt", "r")
     line = gtfs_links.readline()
@@ -336,6 +398,7 @@ def online():
             # print(backup)
 
 def display():
+    global warning
     print("[DEBUG] Display update!")
     clock.setText(datetime.datetime.now().strftime("%H:%M"))
     if len(departures_now) < ilosc:
@@ -349,6 +412,12 @@ def display():
             else:
                 labels[row][col].setStyleSheet("color: white;")
             labels[row][col].setText(f"{departures_now[row][col]}")
+    if warning == True:
+        warning_label.setText(" Prywaciarze nieaktu")
+        warning_label2.setText("alne!!!")
+    else:
+        warning_label.setText("")
+        warning_label2.setText("")
 
 def midnight_check():
     global today, today_datetime, weekday, updated
