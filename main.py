@@ -6,9 +6,11 @@ from PyQt6.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QSplashS
 from PyQt6.QtGui import QFontDatabase, QFont, QPixmap
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-
+scrape_count = 0
+line_online = False
+lonline = False
 updated = False
-fail_count = 1
+fail_count = 2
 online_backup = []
 backup = []
 trip_map = {}
@@ -29,6 +31,10 @@ with open("config.txt", mode="r", encoding="utf-8") as config_file:
     custom_check = config_file.readline().strip()
     filter = config_file.readline().strip()
 
+with open('scrape_custom_links.txt', 'r', encoding='utf-8') as f:
+    for line in f:
+        scrape_count += 1
+
 app = QApplication(sys.argv)
 app.setOverrideCursor(Qt.CursorShape.BlankCursor)
 window = QWidget()
@@ -47,11 +53,11 @@ layout.addWidget(clock, 0, 0)
 # bardzo zoptymalizowane dziekuje mateusz
 warning_label = QLabel("")
 warning_label.setFont(custom_font)
-warning_label.setStyleSheet("color: #FFCC00;")
+warning_label.setStyleSheet("color: red;")
 layout.addWidget(warning_label, 0, 1)
 warning_label2 = QLabel("")
 warning_label2.setFont(custom_font)
-warning_label2.setStyleSheet("color: #FFCC00;")
+warning_label2.setStyleSheet("color: red;")
 layout.addWidget(warning_label2, 0, 2)
 
 labels = []
@@ -84,17 +90,23 @@ if force_update == 1:
 
 def gtfs_update():
     global gtfs_number, trip_map, skip, updated, warning
+    actually_scraped = 0
     if updated == True:
         return False
-
+    warning = False
     if custom_check == "1":
         with open("scrape_custom_links.txt") as f:
             scraped = []
             for line in f:
                 page_url = line.strip()
-                html = requests.get(page_url).text
-                soup = BeautifulSoup(html, "html.parser")
-                pdf_url = None
+                try:
+                    html = requests.get(page_url, timeout=10).text
+                    soup = BeautifulSoup(html, "html.parser")
+                    pdf_url = None
+                except Exception as e:
+                    print(f"[ERROR] Blad przy stronie: {page_url}, error: {e}")
+                    print("[ERROR] Prawdopodobnie nie ma internetu")
+                    return False
 
                 for a in soup.find_all("a", href=True):  # filter na wszystkie linki (<a href="")
                     if ".pdf" in a["href"]:
@@ -102,6 +114,7 @@ def gtfs_update():
                             pdf_url = urljoin(page_url, a["href"])
                             print(f"[INFO] Scrapowano rozklad: {pdf_url}")
                             scraped.append(pdf_url)
+                            actually_scraped += 1
                 if pdf_url is None:
                     print("[INFO] Nie scrapowano zadnego rozkladu.")
 
@@ -113,26 +126,36 @@ def gtfs_update():
 
             if len(os.listdir("custom")) == 0:
                 for i, url in enumerate(scraped, start=1):
-                    r = requests.get(url)
+                    r = requests.get(url, timeout=10)
                     with open("custom/" + str(i) + ".pdf", "wb") as f:
                         f.write(r.content)
                 print("[DEBUG] Zapisano nowe rozklady do folderu custom.")
             else:
                 for i, url in enumerate(scraped, start=1):
-                    f2 = requests.get(url)
-                    with open("custom/" + str(i) + ".pdf", "rb") as f1:
-                        if f1.read() == f2.content:
-                            print("[INFO] Nie wykryto aktualizacji prywaciarzy!")
-                            pixmap = QPixmap("nie.jpg")
-                            splash = QSplashScreen(pixmap)
-                            splash.show()
-                            warning = False
-                        else:
-                            print("[WARNING] Wykryto aktualizacje prywaciarzy!")
-                            pixmap = QPixmap("tak.jpg")
-                            splash = QSplashScreen(pixmap)
-                            splash.show()
-                            warning = True
+                    f2 = requests.get(url, timeout=10)
+                    try:
+                        with open("custom/" + str(i) + ".pdf", "rb") as f1:
+                            if f1.read() != f2.content:
+                                warning = True
+                    except Exception as e:
+                        print(f"[ERROR] {e}")
+                        warning = True
+        print(f"[DEBUG] Scrapy z txt: {scrape_count}")
+        print(f"[DEBUG] Aktualne scrapy: {actually_scraped}")
+
+        if scrape_count != actually_scraped:
+            warning = True
+
+        if warning == True:
+            print("[WARNING] Wykryto aktualizacje prywaciarzy!")
+            pixmap = QPixmap("tak.jpg")
+            splash = QSplashScreen(pixmap)
+            splash.show()
+        else:
+            print("[INFO] Nie wykryto aktualizacji prywaciarzy!")
+            pixmap = QPixmap("nie.jpg")
+            splash = QSplashScreen(pixmap)
+            splash.show()
 
     trip_map = {}
     gtfs_links = open("gtfs_links.txt", "r")
@@ -149,7 +172,7 @@ def gtfs_update():
         if skip == 0:
             print("[DEBUG] Pobieranie GTFS: " + line.strip())
             try:
-                request = requests.get(line.strip())
+                request = requests.get(line.strip(), timeout=10)
             except:
                 print("[ERROR] Brak internetu: " + line.strip())
                 print("[ERROR] Pomijam reszte. . .")
@@ -180,7 +203,7 @@ def gtfs_update():
                         else:
                             possible_desc = {}
                             for desc in location_desc:
-                                # wzor na odleglosc dwoch punktow
+                                # wzor na odleglosc dwoch punktow brawo piekarska
                                 distance = ((float(location_desc[desc][0]) - float(row['stop_lat'])) ** 2 + (float(location_desc[desc][1]) - float(row['stop_lon'])) ** 2) ** 0.5
                                 possible_desc.update({desc: distance})
                             local_departures[current_stop_id]['stop_desc'] = min(possible_desc, key=possible_desc.get)
@@ -293,7 +316,7 @@ def gtfs_update():
             for departure in custom_data[stop_key]:
                 if weekday in departure["days"]:
                     custom_departures.append({
-                        "trip_id": departure["line"],
+                        "trip_id": "CUSTOM",
                         "time": departure["time"],
                         "route_id": departure["line"],
                         "headsign": departure["dest"]
@@ -338,12 +361,15 @@ def offline():
                         backup = departures_now.copy()
 
 def online():
-    global departures_now, backup, online_backup, fail_count
+    global departures_now, backup, online_backup, fail_count, lonline, line_online
+    if lonline == True:
+        line_online = True
+    lonline = False
     with open('live_links.txt', 'r', encoding='utf-8') as f:
         for URL in f:
             URL = URL.strip()
             try:
-                response = requests.get(URL, timeout=15)
+                response = requests.get(URL, timeout=5)
                 if response.status_code != 200:
                     print(f"[WARNING] Zly status: {response.status_code}")
                     continue
@@ -371,6 +397,7 @@ def online():
                                     route = trip_map[trip_id]["route_id"]
                                     headsign = trip_map[trip_id]["headsign"]
                                     print(f"[DEBUG] Linia na żywo: {departure_dt}, {route}, {headsign}, {minutes_str}")
+                                    lonline = True
 
                                     new_departures = []
                                     for d in departures_now:
@@ -378,21 +405,25 @@ def online():
                                             new_departures.append(d)
                                     departures_now = new_departures
                                     departures_now.append((route, headsign, minutes_str, departure_dt, trip_id, 1))
-                                    departures_now = sorted(departures_now, key=lambda x: x[3])
-                                    break # to tutaj jest dla wydajnosci podobno ale nie wiem na ile ufac claude wiec jak cos nie bedzie dzialalo to prosze usunac >:D
-                fail_count = 0
+                                    departures_now = sorted(departures_now, key=lambda x: x[3]) # to tutaj jest dla wydajnosci podobno ale nie wiem na ile ufac claude wiec jak cos nie bedzie dzialalo to prosze usunac >:D
+                                    break
+                if line_online == True and lonline == False:
+                    print("[WARNING] Prawdopodobny drop internetu / serwerow Krakowa! ")
+                    departures_now = online_backup
                 online_backup = departures_now.copy()
+                fail_count = 0
+                print(f"[DEBUG] Liczba brawo: {fail_count}")
             except Exception as e:
-                print(f"[WARNING] Slaba siec lub brawo Krakow: {e}")
                 fail_count += 1
-                if fail_count == 1 and online_backup is not None:
+                print(f"[WARNING] Slaba siec lub brawo Krakow: {e}")
+                print(f"[DEBUG] Liczba brawo: {fail_count}")
+                if fail_count < 4 and online_backup is not None:
                     print("[INFO] Uzywam poprzednich danych online. . .")
                     departures_now = online_backup
                 else:
                     print("[INFO] Uzywam danych offline. . .")
                     if backup is not None:
                         departures_now = backup
-                    fail_count = 0
 
             # print(online_backup)
             # print(backup)
@@ -411,10 +442,13 @@ def display():
                 labels[row][col].setStyleSheet("color: #32CD32;")
             else:
                 labels[row][col].setStyleSheet("color: white;")
+            if warning == True:
+                if departures_now[row][4] == "CUSTOM":
+                    labels[row][col].setStyleSheet("color: #FFCC00;")
             labels[row][col].setText(f"{departures_now[row][col]}")
     if warning == True:
-        warning_label.setText(" Prywaciarze nieaktu")
-        warning_label2.setText("alne!!!")
+        warning_label.setText("   LIS nie jest aktualn")
+        warning_label2.setText("y")
     else:
         warning_label.setText("")
         warning_label2.setText("")
@@ -445,7 +479,7 @@ def update():
 
 timer = QTimer()
 timer.timeout.connect(update)
-timer.start(20000) # 20 sec
+timer.start(7500) # 7.5 sec
 
 update()
 
